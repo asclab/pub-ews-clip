@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+import sys
+
+if len(sys.argv) > 1:
+    thres = int(sys.argv[1])
+else:
+    thres = 10000
+
+i=0
+
+for line in sys.stdin:
+    if i >= thres:
+        sys.stderr.write(line)
+        i = 0
+    sys.stdout.write(line)
+    i += 1

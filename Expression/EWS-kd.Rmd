@@ -1,0 +1,843 @@
+---
+title: "EWS knock-down RNAseq, excluding Control2, final analysis"
+author: "Nieves, et. al."
+date: "Nov 17, 2014, (Updated Feb. 4, 2015)"
+output:
+  pdf_document:
+    fig_caption: yes
+    toc: true
+    
+geometry: margin=1in
+---
+
+Report generated on: `r paste0("",as.POSIXlt(Sys.time(), "UTC"))`
+
+```{r thresholds, echo=FALSE}
+FC_thres <- 1.0
+FDR_thres <- 0.1
+AP_thres <- 10
+file_prefix <- 'EWS-kd'
+Exp_name <- 'EWS'
+Control_name <- 'Control'
+Exp_samplenums <- c(1,2,3,4)
+Control_samplenums <- c(1,3,4)
+fname<-'merged.ensembl.74.hg19.counts.txt'
+
+```
+\newpage
+
+
+# Executive summary
+
+Because of some irregularities with the Control2 sample, it was removed from
+this analysis. In the original analysis, the MDS plot showed that Control2 was
+closer to the EWS samples that the other controls. Additionally, when the
+heatmap of the top 100 differentially expressed genes is analyzed, it is clear
+that the Control2 sample does not behave like the other Controls. Finally, if
+the level of EWSR1 is compared in the Control2 sample to the other Controls
+(and the EWS knock-downs for that matter), it is clear that there was something
+amiss with this sample and it should be removed.
+
+This version should be considered the final differential expression analysis.
+
+The difference between this analysis and the analysis from January is the way that the
+genes are pre-filtered. In January, I required genes to have expression (>10 reads) in all
+Control or all EWS samples. This can have a biasing effect, so instead I'll require that genes 
+have expression in at least 3 samples (the number of controls). The ultimate lists should not be different between the two analyses, but this method is more "correct".
+
+\hfill Marcus Breese
+
+\hfill 2014-11-17
+
+## History
+
+2014-11-17 - mbreese - Updated AP filter to be more unbiased
+
+2015-02-04 - mbreese - Updated to show coding / non-coding genes separately in scatterplot and heatmap
+
+2015-07-28 - mbreese - Updated to add PCA plot
+
+\newpage
+
+# Overview
+
+#### Goal
+
+* To determine which genes are regulated by EWS
+
+#### Method 
+
+* RNA-Seq (HiSeq)
+* Paired-end, stranded library (2x100bp)
+
+#### Samples
+
+* (4x) EWS knock-down (HeLa)
+* (4x) Control (HeLa) - Control2 excluded
+
+#### Pre-processing steps (NGSUtils)  
+
+1. Raw reads were QC filtered to remove poor quality base calls
+    * Trim '#' calls
+    * Removed reads with more than 2 wildcard (N) bases
+    * Removed reads shorter than 50 bases
+1. Reads were mapped to a sequence filter to remove rRNA, tRNA, and reads containing adapter sequences
+1. Only fragments where both reads passed filtering were mapped
+
+
+#### Mapping  
+
+* Reads were mapped to the genome / transcriptome with STAR (hg19, Ensembl gene model)
+
+#### Analysis
+
+1. The number of reads mapped to each gene were tallied (NGSUtils)
+    * Ensembl v74 gene annotations
+    * only uniquely mapped reads
+1. Differential expression analysis (edgeR - see below)
+    * FDR <= `r FDR_thres`
+    * Fold-change (log2) >= `r FC_thres` (`r 2^FC_thres`X)
+1. Control2 was removed from this analysis
+
+
+\newpage
+
+## Mapping summary
+
+|                                                 |   EWS1    |   EWS2    |   EWS3    |   EWS4    |
+|:------------------------------------------------|:---------:|:---------:|:---------:|:---------:|
+| **Read 1**                                      |           |           |           |           |   
+| Raw count                                       | 47,266,528 | 34,375,533 | 36,337,669 | 40,814,646 |
+| Passed QC filter                                | 46,748,585 | 34,009,207 | 35,962,009 | 40,384,769 |
+| Passed Sequence filter (rRNA, tRNA, adapter)    | 46,135,143 | 33,189,578 | 35,694,089 | 39,729,229 |
+|                                                 |           |           |           |           |   
+| **Read 2**                                      |           |           |           |           |   
+| Raw count                                       | 47,266,528 | 34,375,533 | 36,337,669 | 40,814,646 |
+| Passed QC filter                                | 46,074,325 | 33,617,246 | 35,561,783 | 39,927,962 |
+| Passed Sequence filter (rRNA, tRNA, adapter)    | 45,422,108 | 32,777,773 | 35,282,862 | 39,249,430 |
+|                                                 |           |           |           |           |   
+| **Paired mapping**                              |           |           |           |           |   
+| Properly paired                                 | 44,965,189 | 32,444,614 | 34,945,198 | 38,853,310 |
+| Mapped to hg19/transcriptome                    | 44,305,132 | 31,949,826 | 34,217,934 | 38,027,233 |
+| Uniquely mapped                                 | 42,258,659 | 30,373,437 | 32,784,589 | 36,200,426 |
+| Mapped to coding regions                        | **33,731,112** | **24,345,729** | **26,423,557** | **28,600,487** |
+
+\newpage
+
+|                                                 |  Control1  |  Control3  |  Control4  |
+|:------------------------------------------------|:----------:|:----------:|:----------:|
+| **Read 1**                                      |            |            |            |
+| Raw count                                       | 42,912,590 | 42,516,468 | 41,868,927 |
+| Passed QC filter                                | 42,444,386 | 42,065,016 | 41,423,800 |
+| Passed Sequence filter (rRNA, tRNA, adapter)    | 42,099,463 | 41,634,320 | 40,858,385 |
+|                                                 |           |          |           |
+| **Read 2**                                      |           |          |           |
+| Raw count                                       | 42,912,590 | 42,516,468 | 41,868,927 |
+| Passed QC filter                                | 41,877,101 | 41,579,064 | 40,950,019 |
+| Passed Sequence filter (rRNA, tRNA, adapter)    | 41,523,540 | 41,136,121 | 40,363,719 |
+|                                                 |           |          |           |
+| **Paired mapping**                              |           |          |           |
+| Properly paired                                 | 41,105,241 | 40,730,688 | 39,960,830 |
+| Mapped to hg19/transcriptome                    | 40,061,188 | 39,740,383 | 38,811,569 |
+| Uniquely mapped                                 | 38,530,557 | 38,203,267 | 37,265,719 |
+| Mapped to coding regions                        | **31,564,505** | **31,157,510** | **30,429,878** |
+
+Read and coverage tracks are available on the Sweet-Cordero lab IGV data server.
+
+
+\newpage
+
+## Common setup
+
+```{r imports_and_functions}
+library(ggplot2)
+library(reshape)
+library(knitr)
+library(edgeR)
+library(gplots)
+library(RColorBrewer)
+
+opts_chunk$set(cache=TRUE)
+#opts_chunk$set(cache.path='cache/A673-cache-')
+#opts_chunk$set(fig.path='figures/A673-report-')
+
+ap_filter<-function(row, cond, mincount) {
+    v <- rep(0, length(cond))
+    for (i in c(1:length(cond))) {
+        if (as.numeric(row[[cond[i]]])>=mincount) {
+            v[i] <- 1
+        }
+    }
+    sum(v)
+}
+
+```
+
+\newpage
+
+## Read data
+
+Here we read in the counts file and apply some initial filtering to remove low-expressed genes. Any genes that have less than 10 reads in all of the replicates for EWS or the controls will be marked as 'absent'.
+
+```{r read_data}
+df <- read.table(fname, sep='\t', header=T)
+rownames(df) <- df[,1]
+head(df)
+
+# Number of genes in raw list
+total_genes <- nrow(df)
+
+# sample classes
+
+Exp <- paste0(Exp_name,Exp_samplenums)
+Control <- paste0(Control_name,Control_samplenums)
+
+Exp_count <- paste0(Exp, '.count')
+Control_count <- paste0(Control, '.count')
+ALL <- c(Control_count, Exp_count)
+
+shortnames <- c(Control, Exp)
+group <- factor(c(rep(Control_name, length(Control)),rep(Exp_name, length(Exp))), levels=c(Control_name, Exp_name))
+
+
+#set some other colors
+exp_col <- brewer.pal(11,"RdBu")[2]
+control_col <- brewer.pal(11,"RdBu")[10]
+
+# red/green
+#overexp_col <- brewer.pal(11,"RdYlGn")[2]
+#underexp_col <- brewer.pal(11,"RdYlGn")[10]
+
+# red/blue
+overexp_col <- brewer.pal(11,"RdBu")[2]
+underexp_col <- brewer.pal(11,"RdBu")[10]
+
+
+nochange_col <- '#CCCCCC'
+
+group_colors <- c(rep(control_col, length(Control)), rep(exp_col, length(Exp)))
+
+
+```
+
+\newpage
+
+## AP filter
+
+Now we filter out genes that aren't present in enough samples. The threshold we will use is the gene must have enough reads to be called present in at least as many samples as are in either the Control or Experimental group. If you have a 3 x 3 experiment, then a gene must be present in at least 3 samples, regardless of the group. If you have a 4 x 6 experiment, then the gene must be present in at least 4 samples.
+
+For this experiment, genes must be present (>=`r AP_thres` reads) in at least `r min(length(Exp), length(Control))` samples.
+
+```{r ap_calc}
+df$Exp_ap <- apply(df, 1, ap_filter, Exp_count, AP_thres)
+df$Control_ap <- apply(df, 1, ap_filter, Control_count, AP_thres)
+df$ALL_ap <- apply(df, 1, ap_filter, ALL, AP_thres)
+
+ap_exp <- c()
+ap_control <- c()
+ap_count <- c()
+
+for (i in seq(0,length(Exp))) {
+    for (j in seq(0,length(Control))) {
+        ap_exp <- c(ap_exp, i)
+        ap_control <- c(ap_control, j)
+        ap_count <- c(ap_count, sum(df$Exp_ap == i & df$Control_ap == j))
+    }
+}
+
+ap_df <- data.frame(exp=ap_exp, control=ap_control, count=ap_count)
+
+```
+
+```{r plot_ap, fig.dpi=144, fig.width=7, fig.height=6, fig.cap=paste0("Distribution of AP values (number of samples with a count >", AP_thres, ").")}
+plotap<-ggplot(df,aes(x=as.factor(Control_ap),y=as.factor(Exp_ap)))+ 
+    geom_bin2d() +
+    geom_text(data=ap_df, mapping=aes(x=control+1, y=exp+1, label=count)) +
+    theme_bw() +
+    scale_fill_gradientn(colours=brewer.pal(9,'Blues')) +
+    theme(legend.position="none", legend.title=element_blank(), legend.key = element_blank()) +
+    labs(x=paste0(Control_name," AP"), y=paste0(Exp_name," AP"))
+plotap
+```
+
+```{r ap_filtering}
+min_sample_count <- min(length(Exp), length(Control))
+min_sample_count
+filtered <- df[df$ALL_ap >= min_sample_count, ALL]
+#filtered_genelength <- df[df$AP == 1, 'length']
+
+for (sample in ALL) {
+    cat(sample," ",paste0(sum(df[,sample]>=AP_thres),"\n"))
+}
+
+colnames(filtered) <- shortnames
+
+# Number of genes passing AP filter
+present_genes <- nrow(filtered)
+head(filtered)
+summary(filtered)
+```
+
+|                |  Count            |      % |
+|:---------------|------------------:|-------:|
+| Total genes    | `r total_genes`   | |
+| Present genes  | `r present_genes` | (`r round(present_genes * 100 /total_genes,1)`%) |
+| **By sample**  |                   | |
+```{r present_genes_by_sample, echo=FALSE, results='asis'}
+for (i in seq(1, length(ALL))) {
+    cat("|",shortnames[i],"|",paste0(sum(df[,ALL[i]]>=AP_thres),"| |\n"))
+}
+```
+
+
+```{r reformat_for_plotting}
+# Reformat counts for plotting
+rawcounts <- melt(filtered)
+rawcounts$group <- ''
+colnames(rawcounts) <- c('sample', 'genecount','group')
+rawcounts[rawcounts$sample %in% Exp,]$group <- 'Exp'
+rawcounts[rawcounts$sample %in% Control,]$group <- 'Control'
+
+sample_counts <- c()
+for (i in seq(1,length(shortnames))) {
+    sample_counts <- c(sample_counts, sum(filtered[,i]))
+}
+
+rawcount_df <- data.frame(sample=factor(shortnames, shortnames), count=sample_counts)
+rawcount_df$group <- ''
+rawcount_df[rawcount_df$sample %in% Exp,]$group <- 'Exp'
+rawcount_df[rawcount_df$sample %in% Control,]$group <- 'Control'
+
+```
+\newpage
+```{r rawcount_p, fig.width=7, fig.height=6, dpi=144, fig.cap='Raw read count for each sample'}
+rawcount_p <- ggplot(rawcount_df, aes(x=sample,y=count, fill=group)) + 
+         scale_fill_manual(values=c(Exp=exp_col, Control=control_col), labels=c(Control_name, Exp_name), breaks=c('Control', 'Exp')) +
+         geom_bar(stat="identity") +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x="", y="Total counts")
+rawcount_p
+```
+\newpage
+```{r rawbox_p, fig.width=7, fig.height=6, dpi=144, fig.cap='Distribution of raw read counts for a gene'}
+rawbox_p <- ggplot(rawcounts, aes(x=sample, y=log2(genecount+2))) + 
+         geom_boxplot(aes(fill=factor(group))) +
+         scale_fill_manual(values=c(Exp=exp_col, Control=control_col), labels=c(Control_name, Exp_name), breaks=c('Control', 'Exp')) +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x="", y="Raw number of reads (log2)")
+rawbox_p
+```
+
+\clearpage
+
+## Total raw counts per sample
+
+The raw counts are distributed in a log-linear fashion scale. Thus, for further analysis, we will use log-transformed counts for comparisons. This isn't true for the extreme high and low levels, but for the vast majority of the dynamic range, it holds true.
+
+```{r raw_counts}
+head(filtered)
+total_counts <- as.data.frame(apply(filtered[,shortnames],1, sum))    
+total_counts$foo <- ''
+colnames(total_counts) <- c('total','foo')
+tcsorted <- total_counts[order(total_counts$total),]
+tcsorted_names <- rownames(tcsorted)
+tcsorted<-as.data.frame(tcsorted[,1])
+rownames(tcsorted) <- tcsorted_names
+rm(tcsorted_names)
+colnames(tcsorted) <- c('total')
+head(tcsorted)
+```
+```{r total_counts_p, fig.width=7, fig.height=6, dpi=144, fig.cap='The total number of counts per gene is log-linear.'}
+total_counts_p <- ggplot(tcsorted, aes(x=1:nrow(tcsorted),y=total)) + 
+    geom_point() + 
+    scale_y_log10()+
+    labs(x="Sorted rank", y="Total number of reads (log-scale)")+
+    theme_bw()
+total_counts_p
+
+```
+
+# Differential expression (edgeR)
+
+This is the standard edgeR pipeline using a GLM for estimating the dispersion parameters. The workflow was taken from the edgeR tutorial.
+
+```{r edgeR}
+design <- model.matrix(~group)
+y <- DGEList(counts=filtered,group=group)
+y <- calcNormFactors(y)
+y <- estimateGLMCommonDisp(y,design, verbose=T)
+y <- estimateGLMTrendedDisp(y,design)
+y <- estimateGLMTagwiseDisp(y,design)
+
+# Common dispersion
+y$common.dispersion
+
+fit <- glmFit(y,design)
+lrt <- glmLRT(fit,coef=2)
+topTags(lrt)
+
+# get effective CPM values for each gene (log2)
+# (these can be used anywhere an RPKM value would be used)
+logCPMS <- as.data.frame(cpm(y, prior_count=2, log=T))
+logCPMcols <- paste0(ALL, ' log2(CPM)')
+colnames(logCPMS) <- logCPMcols
+
+#rpkms <- as.data.frame(rpkm(y,gene.length=filtered_genelength))
+#rpkmcols <- paste0(ALL, ' RPKM')
+#colnames(rpkms) <- rpkmcols
+
+# Add FDR correction (BH) to p-value
+lrt$table$FDR<-p.adjust(lrt$table$PValue, 'BH')
+```
+
+\newpage
+
+## PCA plot
+```{r edgeR_pca_setup, fig.keep='none'}
+# setup MDS
+B.res<-prcomp(logCPMS)
+pc.s = summary(B.res)$importance[2,1:2]
+pc1.var = round(pc.s[["PC1"]],2)
+pc2.var = round(pc.s[["PC2"]],2)
+
+pca.df <- data.frame(x=B.res$rotation[,1], y=B.res$rotation[,2], group=group)
+pca.df$class <- ''
+pca.df[pca.df$group == Exp_name,]$class <- 'Exp'
+pca.df[pca.df$group == Control_name,]$class <- 'Control'
+rownames(pca.df) <- shortnames
+
+```
+```{r edgeR_pca_plot, fig.width=7, fig.height=6, dpi=144, fig.cap='PCA plot - Principal components for the logCPM values.'}
+pca_p <- ggplot(pca.df, aes(x=x, y=y, col=class, label=rownames(pca.df))) + 
+         scale_color_manual(values=c(Exp=exp_col, Control=control_col), breaks=c('Control', 'Exp'), labels=c(Control_name, Exp_name)) +
+         geom_point(size=10) + 
+         geom_text(col='black', size=4) + 
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x=paste0("PC 1 (",pc1.var,"%)"), y=paste0("PC 2 (",pc2.var,"%)"))
+pca_p
+```
+
+
+\newpage
+
+## MDS plot
+```{r edgeR_mds_setup, fig.keep='none'}
+# setup MDS
+mds<-plotMDS(y)
+mds.df <- data.frame(x=mds$x, y=mds$y, group=group)
+mds.df$class <- ''
+mds.df[mds.df$group == Exp_name,]$class <- 'Exp'
+mds.df[mds.df$group == Control_name,]$class <- 'Control'
+
+```
+```{r edgeR_mds_plot, fig.width=7, fig.height=6, dpi=144, fig.cap='MDS plot - This plot tells you the major differences between samples. You should see a clear split between control and experimental samples (hopefully in the first dimension).'}
+mds_p <- ggplot(mds.df, aes(x=x, y=y, col=class, label=rownames(mds.df))) + 
+         scale_color_manual(values=c(Exp=exp_col, Control=control_col), breaks=c('Control', 'Exp'), labels=c(Control_name, Exp_name)) +
+         geom_point(size=10) + 
+         geom_text(col='black', size=4) + 
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x="Dimension 1", y="Dimension 2")
+mds_p
+```
+
+
+\newpage
+
+## Normalization factors and edgeR factors
+
+```{r sample_table, results='asis'}
+kable(lrt$samples)
+```
+
+```{r format_normalized_counts, results='asis'}
+norm_logcpm <- melt(logCPMS)
+norm_logcpm$group <- ''
+colnames(norm_logcpm) <- c('sample', 'logcpm','group')
+levels(norm_logcpm$sample) <- shortnames
+norm_logcpm[norm_logcpm$sample %in% Exp ,]$group <- 'Exp'
+norm_logcpm[norm_logcpm$sample %in% Control ,]$group <- 'Control'
+```
+\newpage
+```{r normbox_p, fig.width=7, fig.height=6, dpi=144, fig.cap='Distribution of normalized read counts for each sample - log2(CPM). These should look very similar.'}
+normbox_p <- ggplot(norm_logcpm, aes(x=sample, y=logcpm)) + 
+         geom_boxplot(aes(fill=factor(group))) +
+         scale_fill_manual(values=c(Exp=exp_col, Control=control_col), breaks=c('Control', 'Exp'), labels=c(Control_name, Exp_name)) +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x="", y="Normalized number of reads - log2(CPM)")
+normbox_p
+
+```
+\newpage
+```{r edgeR_bcv, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Biological coefficient of variation - This plot tells you how much of the signal is due to biological variability in the samples. A value of 0.1 is common for cell-culture, whereas 0.4 is a common value for different biological samples. For this sample, the BCV=',round(sqrt(y$common.dispersion), 5), ".")}
+plotBCV(y)
+```
+\newpage
+```{r edgeR_mvp, fig.width=7, fig.height=6, dpi=144, fig.cap='Mean variance plot'}
+plotMeanVar(y, show.raw.vars=TRUE, show.tagwise.vars=TRUE, show.binned.common.disp.vars=FALSE, show.ave.raw.vars=FALSE, NBline = TRUE , nbins = 100 , pch = 16 , xlab ="Mean Expression (log10)" , ylab = "Variance (log10)")
+```
+
+\newpage
+
+## GAPDH CPM levels
+```{r target7_cpm_p, fig.width=7, fig.height=6, dpi=144, fig.cap='The calculated expression level of GAPDH (log2 CPM) (should be an endogenous control).'}
+
+target7_cpm <- melt(logCPMS['ENSG00000111640',])
+target7_cpm$group <- ''
+colnames(target7_cpm) <- c('sample', 'logcpm','group')
+levels(target7_cpm$sample) <- shortnames
+target7_cpm[target7_cpm$sample %in% Exp,]$group <- 'Exp'
+target7_cpm[target7_cpm$sample %in% Control,]$group <- 'Control'
+
+target7_cpm_p <- ggplot(target7_cpm, aes(x=sample, y=logcpm, fill=group)) + 
+         scale_fill_manual(values=c("Exp"=exp_col, "Control"=control_col)) +
+         geom_bar(stat="identity") +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x="", y="Normalized number of GAPDH reads - (log CPM)")
+target7_cpm_p
+```
+
+## EWSR1 CPM levels
+```{r target9_cpm_p, fig.width=7, fig.height=6, dpi=144, fig.cap='The calculated expression level of EWSR1 (log2 CPM).'}
+
+target9_cpm <- melt(logCPMS['ENSG00000182944',])
+target9_cpm$group <- ''
+colnames(target9_cpm) <- c('sample', 'logcpm','group')
+levels(target9_cpm$sample) <- shortnames
+target9_cpm[target9_cpm$sample %in% Exp,]$group <- 'Exp'
+target9_cpm[target9_cpm$sample %in% Control,]$group <- 'Control'
+
+target9_cpm_p <- ggplot(target9_cpm, aes(x=sample, y=logcpm, fill=group)) + 
+         scale_fill_manual(values=c("Exp"=exp_col, "Control"=control_col)) +
+         geom_bar(stat="identity") +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x="", y="Normalized number of EWSR1 reads - (log CPM)")
+target9_cpm_p
+```
+
+\clearpage
+
+# Results
+
+## Differential expression
+
+Here, we combine the edgeR results with the original gene counts. 
+Using the log2 fold-change threshold of *`r FC_thres`* and an FDR cut-off of *`r FDR_thres`*, here is the breakdown of the number of genes that are enriched (up relative to Control), repressed (down relative to Control), show no change, or are absent from the analysis.
+
+```{r merge_results}
+
+FDR_thres
+FC_thres
+
+# combine original data with edgeR results
+merged<-merge(df,lrt$table, by=0, all.x=T)
+rownames(merged) <- merged$Row.names
+merged$Row.names<-NULL
+
+# combine original data with logCPM counts
+merged<-merge(merged,logCPMS, by=0, all.x=T)
+rownames(merged) <- merged$Row.names
+merged$Row.names<-NULL
+
+merged$class <- 'no-change'
+merged[is.na(merged$logFC),]$class <- 'absent'
+
+merged[!is.na(merged$logFC) & merged$FDR<=FDR_thres & merged$logFC >= FC_thres, ]$class <- 'up'
+merged[!is.na(merged$logFC) & merged$FDR<=FDR_thres & merged$logFC <= -FC_thres, ]$class <- 'down'
+
+averows <-function(row, cond) {
+    acc <- 0
+    for (i in c(1:length(cond))) {
+        acc <- acc + as.numeric(row[[cond[i]]])
+    }
+    acc / length(cond)
+}
+
+merged$Exp_avecpm <- apply(merged, 1, averows, paste0(Exp_count, " log2(CPM)"))
+merged$Control_avecpm <- apply(merged, 1, averows, paste0(Control_count, " log2(CPM)"))
+
+```
+
+\newpage
+
+
+```{r class_table, results='asis'}
+tmp<-as.data.frame(table(merged$class))
+rownames(tmp) <- tmp$Var1
+tmp$Var1<-NULL
+kable(tmp)
+```
+
+
+\newpage
+```{r ma_plot, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Gene enrichment / MA plot. The x axis is the relative expression value for a gene (log2) and the y axis is the fold-change for a gene (log2). Genes that passed the FDR (', FDR_thres,') and log fold-change (', FC_thres, ') thresholds were annotated as enriched or repressed, respectively. Genes that passed the FDR cut-off, but were below the FC cut-off (blue lines) are annotated as significant. The triangle indicates EWSR1.')}
+
+merged$isews <- 'N'
+merged['ENSG00000182944', ]$isews <- 'Y'
+
+maplot_p <- ggplot(merged[merged$class!='absent',], 
+                   aes(x=logCPM,y=logFC, 
+                       col=factor(class), shape=factor(isews), size=factor(isews))) + 
+         scale_color_manual(values=c("up"=overexp_col, "no-change"=nochange_col, "down"=underexp_col), 
+                            breaks=c("up", "down", "no-change"), 
+                            labels=c(paste0("up (",nrow(merged[merged$class=='up',]),")"), 
+                                     paste0("down (",nrow(merged[merged$class=='down',]),")"), 
+                                     "no-change")) +
+         scale_shape(guide = "none") +
+         scale_size_manual(guide="none", values=c("N"=2, "Y"=5)) +
+         geom_point() +
+         geom_hline(aes(yintercept=FC_thres), color='blue') +
+         geom_hline(aes(yintercept=-FC_thres), color='blue') +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x="CPM (log2)", y="Fold change (log2)")
+maplot_p
+#ggsave("figures/ma-plot.pdf", plot=maplot_p, height=6, width=7)
+
+```
+
+\newpage
+
+```{r scatter_plot, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Gene expression scatter plot. Values plotted are the average CPM (log2) values for each condition. Genes that passed the FDR (', FDR_thres,') and log fold-change (', FC_thres, ') thresholds were annotated as enriched or repressed, respectively. Genes that passed the FDR cut-off, but were below the FC cut-off (blue lines) are annotated as significant.')}
+
+scatterplot_p <- ggplot(merged[merged$class!='absent',], 
+                        aes(x=Control_avecpm,y=Exp_avecpm, 
+                            col=factor(class), shape=factor(isews), size=factor(isews))) + 
+         scale_color_manual(values=c("up"=overexp_col, "no-change"=nochange_col, "down"=underexp_col), 
+                            breaks=c("up", "down", "no-change"), 
+                            labels=c(paste0("up (",nrow(merged[merged$class=='up',]),")"), 
+                                     paste0("down (",nrow(merged[merged$class=='down',]),")"), 
+                                     "no-change")) +
+         scale_shape(guide = "none") +
+         scale_size_manual(guide="none", values=c("N"=2, "Y"=5)) +
+
+         geom_point() +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x=paste0(Control_name, " average CPM (log2)"), y=paste0(Exp_name, " average CPM (log2)"))
+scatterplot_p
+#ggsave("figures/scatter-plot.pdf", plot=scatterplot_p, height=6, width=7)
+
+```
+
+
+\newpage
+
+```{r scatter_plot_coding, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Gene expression scatter plot (coding only). Values plotted are the average CPM (log2) values for each condition. Genes that passed the FDR (', FDR_thres,') and log fold-change (', FC_thres, ') thresholds were annotated as enriched or repressed, respectively. Genes that passed the FDR cut-off, but were below the FC cut-off (blue lines) are annotated as significant.')}
+
+scatterplot_coding_p <- ggplot(merged[merged$class!='absent' & merged$gene_biotype == 'protein_coding',], 
+                        aes(x=Control_avecpm,y=Exp_avecpm, 
+                            col=factor(class), shape=factor(isews), size=factor(isews))) + 
+         scale_color_manual(values=c("up"=overexp_col, "no-change"=nochange_col, "down"=underexp_col), 
+                            breaks=c("up", "down", "no-change"), 
+                            labels=c(paste0("up (",nrow(merged[merged$class=='up' & merged$gene_biotype == 'protein_coding',]),")"), 
+                                     paste0("down (",nrow(merged[merged$class=='down' & merged$gene_biotype == 'protein_coding',]),")"), 
+                                     "no-change")) +
+         scale_shape(guide = "none") +
+         scale_size_manual(guide="none", values=c("N"=2, "Y"=5)) +
+
+         geom_point() +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x=paste0(Control_name, " average CPM (log2)"), y=paste0(Exp_name, " average CPM (log2)"))
+scatterplot_coding_p
+#ggsave("figures/scatter-plot.pdf", plot=scatterplot_p, height=6, width=7)
+
+```
+
+\newpage
+
+```{r scatter_plot_non_coding, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Gene expression scatter plot (non-coding only). Values plotted are the average CPM (log2) values for each condition. Genes that passed the FDR (', FDR_thres,') and log fold-change (', FC_thres, ') thresholds were annotated as enriched or repressed, respectively. Genes that passed the FDR cut-off, but were below the FC cut-off (blue lines) are annotated as significant.')}
+
+scatterplot_non_coding_p <- ggplot(merged[merged$class!='absent' & merged$gene_biotype != 'protein_coding',], 
+                        aes(x=Control_avecpm,y=Exp_avecpm, 
+                            col=factor(class), shape=factor(isews), size=factor(isews))) + 
+         scale_color_manual(values=c("up"=overexp_col, "no-change"=nochange_col, "down"=underexp_col), 
+                            breaks=c("up", "down", "no-change"), 
+                            labels=c(paste0("up (",nrow(merged[merged$class=='up' & merged$gene_biotype != 'protein_coding',]),")"), 
+                                     paste0("down (",nrow(merged[merged$class=='down' & merged$gene_biotype != 'protein_coding',]),")"), 
+                                     "no-change")) +
+         scale_shape(guide = "none") +
+         scale_size_manual(guide="none", values=c("N"=2, "Y"=5)) +
+
+         geom_point() +
+         theme_bw() +
+         theme(legend.position="bottom", legend.title=element_blank(), legend.key = element_blank()) +
+         labs(x=paste0(Control_name, " average CPM (log2)"), y=paste0(Exp_name, " average CPM (log2)"))
+scatterplot_non_coding_p
+#ggsave("figures/scatter-plot.pdf", plot=scatterplot_p, height=6, width=7)
+
+```
+
+
+\newpage
+
+```{r heatmap_plot_top100, fig.width=7, fig.height=6, dpi=144, fig.cap='Heatmap of the top 100 differentially expressed genes. For this small set of genes, the two classes should be in distinct clusters. This is a good quality control measure to verify that the samples types are clustering separately. Genes and samples have both been clustered.  Colors are determined using the Z-score for each gene (log2 CPM).'}
+# sort by p-value
+top100<-merged[with(merged, order(PValue)), ]
+top100 <- top100[1:100,logCPMcols]
+colnames(top100) <- shortnames
+heatmap.2(as.matrix(top100), dendrogram="both", scale="row", 
+           density.info="none", trace="none", key=T, keysize=1.5, labRow=NA, cexCol=0.9, 
+           col = brewer.pal(9,"Blues"), ColSideColor = group_colors)
+```
+
+\newpage
+
+```{r heatmap_plot_unsupervised, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Heatmap of all expressed / present genes (',nrow(merged[merged$class != 'absent',]),'. Genes and samples have both been clustered.  Colors are determined using the Z-score for each gene (log2 CPM).')}
+# sort by p-value
+allpresent <- merged[merged$class != 'absent',logCPMcols]
+colnames(allpresent) <- shortnames
+heatmap.2(as.matrix(allpresent), dendrogram="both", scale="row", 
+           density.info="none", trace="none", key=T, keysize=1.5, labRow=NA, cexCol=0.9, 
+           col = brewer.pal(9,"Blues"), ColSideColor = group_colors)
+```
+
+\newpage
+
+```{r heatmap_plot_unsupervised_coding, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Heatmap of all coding genes (',nrow(merged[merged$class != 'absent' & merged$gene_biotype=='protein_coding',]),'. Genes and samples have both been clustered.  Colors are determined using the Z-score for each gene (log2 CPM).')}
+# sort by p-value
+allpresent_coding <- merged[merged$class != 'absent' & merged$gene_biotype=='protein_coding' ,logCPMcols]
+colnames(allpresent_coding) <- shortnames
+heatmap.2(as.matrix(allpresent_coding), dendrogram="both", scale="row", 
+           density.info="none", trace="none", key=T, keysize=1.5, labRow=NA, cexCol=0.9, 
+           col = brewer.pal(9,"Blues"), ColSideColor = group_colors)
+```
+
+\newpage
+
+
+```{r heatmap_plot_unsupervised_non_coding, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Heatmap of all non-coding genes (',nrow(merged[merged$class != 'absent' & merged$gene_biotype!='protein_coding',]),'. Genes and samples have both been clustered.  Colors are determined using the Z-score for each gene (log2 CPM).')}
+# sort by p-value
+allpresent_nc <- merged[merged$class != 'absent' & merged$gene_biotype!='protein_coding' ,logCPMcols]
+colnames(allpresent_nc) <- shortnames
+heatmap.2(as.matrix(allpresent_nc), dendrogram="both", scale="row", 
+           density.info="none", trace="none", key=T, keysize=1.5, labRow=NA, cexCol=0.9, 
+           col = brewer.pal(9,"Blues"), ColSideColor = group_colors)
+```
+
+\newpage
+
+
+```{r heatmap_all_plot, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Heatmap of all differentially expressed genes (', nrow(merged[merged$class=='up' | merged$class=='down',]), '). Genes and samples have both been clustered. Colors are determined using the Z-score for each gene (log2 CPM).')}
+
+heatAll<-merged[merged$class=='up' | merged$class=='down',logCPMcols]
+colnames(heatAll) <- shortnames
+heatmap.2(as.matrix(heatAll), dendrogram="both", scale="row",
+           density.info="none", trace="none", key=T, keysize=1.5, labRow=NA, cexCol=0.9, 
+           col = brewer.pal(9,"Blues"), ColSideColor = group_colors)
+```
+
+\newpage
+
+
+
+```{r heatmap_all_plot_coding, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Heatmap of all differentially expressed coding genes (', nrow(merged[(merged$class=='up' | merged$class=='down') & merged$gene_biotype == 'protein_coding',]), '). Genes and samples have both been clustered. Colors are determined using the Z-score for each gene (log2 CPM).')}
+
+heatAll_coding<-merged[(merged$class=='up' | merged$class=='down') & merged$gene_biotype == 'protein_coding',logCPMcols]
+colnames(heatAll_coding) <- shortnames
+heatmap.2(as.matrix(heatAll_coding), dendrogram="both", scale="row",
+           density.info="none", trace="none", key=T, keysize=1.5, labRow=NA, cexCol=0.9, 
+           col = brewer.pal(9,"Blues"), ColSideColor = group_colors)
+```
+
+\newpage
+
+
+
+```{r heatmap_all_plot_noncoding, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Heatmap of all differentially expressed non-coding genes (', nrow(merged[(merged$class=='up' | merged$class=='down') & merged$gene_biotype != 'protein_coding',]), '). Genes and samples have both been clustered. Colors are determined using the Z-score for each gene (log2 CPM).')}
+
+heatAll_nc<-merged[(merged$class=='up' | merged$class=='down') & merged$gene_biotype != 'protein_coding',logCPMcols]
+colnames(heatAll_nc) <- shortnames
+heatmap.2(as.matrix(heatAll_nc), dendrogram="both", scale="row",
+           density.info="none", trace="none", key=T, keysize=1.5, labRow=NA, cexCol=0.9, 
+           col = brewer.pal(9,"Blues"), ColSideColor = group_colors)
+```
+
+\newpage
+
+
+```{r heatmap_all_byfoldchange, fig.width=7, fig.height=6, dpi=144, fig.cap=paste0('Heatmap of all differentially expressed genes (', nrow(merged[merged$class=='up' | merged$class=='down',]), '). Only samples have been clustered, genes are shown in order of decreasing fold-change. Colors are determined using the Z-score for each gene (log2 CPM). The genes are also annotated by their fold-change (high to low).')}
+heatAllFC<-merged[merged$class=='up' | merged$class=='down',c(logCPMcols, 'logFC')]
+heatAllFC<-heatAllFC[with(heatAllFC, order(-logFC)), ]
+FCbins <- cut(heatAllFC$logFC, c(-Inf, -4, -3, -2, -1, 0, 1, 2, 3, 4, Inf), rev(brewer.pal(10, "RdBu")))
+
+heatAllFC <- heatAllFC[,logCPMcols]
+colnames(heatAllFC) <- shortnames
+
+heatmap.2(as.matrix(heatAllFC), Rowv=F, dendrogram="column",
+           density.info="none", trace="none", key=T, keysize=1.5, labRow=NA, cexCol=0.9, scale="row",
+           col = brewer.pal(9,"Blues"), ColSideColor = group_colors, RowSideColor=as.character(FCbins))
+```
+
+
+\newpage
+```{r foldchange_legend, fig.width=3, fig.height=2, dpi=144, fig.cap="Fold-change bin colors"}
+display.brewer.pal(10,'RdBu')
+```
+
+\newpage
+```{r foldchange_breakdown, fig.width=7, fig.height=6, dpi=144, fig.cap="Breakdown of the number of genes in each fold-change class."}
+FCbins2 <- cut(merged$logFC, c(-Inf, -4, -3, -2, -1, 0, 1, 2, 3, 4, Inf))
+meltedFC <- melt(FCbins2)
+
+plot(log10(table(FCbins2)), lwd=55, type='h', col=rev(brewer.pal(10, "RdBu")), ylab="Number of genes (log10)", xlab="Fold-change cut off (log2)", lend=1, xaxt="n")
+axis(1,  at=c(0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5), labels=c(-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5))
+```
+
+\newpage
+
+#### Write results out to files
+
+```{r write_output}
+
+# sort by p-value
+merged<-merged[with(merged, order(PValue)), ]
+
+# Write output file with merged edgeR results
+write.table(merged,paste0(file_prefix,".merged.export.txt"),sep="\t", quote=F, row.names=F, na='')
+
+write.table(merged[merged$class =='down',]$gene_name, paste0(file_prefix,".genelist.down.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class =='up',]$gene_name, paste0(file_prefix,".genelist.up.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class !='absent',]$gene_name, paste0(file_prefix,".genelist.present.txt"), quote=F, row.names=F, col.names=F, na='')
+
+write.table(merged[merged$class =='down',]$gene_id, paste0(file_prefix,".geneid.down.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class =='up',]$gene_id, paste0(file_prefix,".geneid.up.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class !='absent',]$gene_id, paste0(file_prefix,".geneid.present.txt"), quote=F, row.names=F, col.names=F, na='')
+
+
+write.table(merged[merged$class =='down' & merged$gene_biotype == 'protein_coding',]$gene_name, paste0(file_prefix,".genelist.coding.down.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class =='up' & merged$gene_biotype == 'protein_coding',]$gene_name, paste0(file_prefix,".genelist.coding.up.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class !='absent' & merged$gene_biotype == 'protein_coding',]$gene_name, paste0(file_prefix,".genelist.coding.present.txt"), quote=F, row.names=F, col.names=F, na='')
+
+write.table(merged[merged$class =='down' & merged$gene_biotype == 'protein_coding',]$gene_id, paste0(file_prefix,".geneid.coding.down.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class =='up' & merged$gene_biotype == 'protein_coding',]$gene_id, paste0(file_prefix,".geneid.coding.up.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class !='absent' & merged$gene_biotype == 'protein_coding',]$gene_id, paste0(file_prefix,".geneid.coding.present.txt"), quote=F, row.names=F, col.names=F, na='')
+
+
+write.table(merged[merged$class =='down' & merged$gene_biotype != 'protein_coding',]$gene_name, paste0(file_prefix,".genelist.non-coding.down.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class =='up' & merged$gene_biotype != 'protein_coding',]$gene_name, paste0(file_prefix,".genelist.non-coding.up.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class !='absent' & merged$gene_biotype != 'protein_coding',]$gene_name, paste0(file_prefix,".genelist.non-coding.present.txt"), quote=F, row.names=F, col.names=F, na='')
+
+write.table(merged[merged$class =='down' & merged$gene_biotype != 'protein_coding',]$gene_id, paste0(file_prefix,".geneid.non-coding.down.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class =='up' & merged$gene_biotype != 'protein_coding',]$gene_id, paste0(file_prefix,".geneid.non-coding.up.txt"), quote=F, row.names=F, col.names=F, na='')
+write.table(merged[merged$class !='absent' & merged$gene_biotype != 'protein_coding',]$gene_id, paste0(file_prefix,".geneid.non-coding.present.txt"), quote=F, row.names=F, col.names=F, na='')
+
+```
+
+\newpage
+
+#### Session/run-time information
+
+----
+
+```{r session_info, cache=FALSE}
+sessionInfo()
+as.POSIXlt(Sys.time(), "UTC")
+```
